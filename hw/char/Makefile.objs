@@ -12,7 +12,6 @@ common-obj-$(CONFIG_CADENCE) += cadence_uart.o
 obj-$(CONFIG_EXYNOS4) += exynos4210_uart.o
 obj-$(CONFIG_COLDFIRE) += mcf_uart.o
 obj-$(CONFIG_OMAP) += omap_uart.o
-obj-$(CONFIG_SH4) += sh_serial.o
 obj-$(CONFIG_PSERIES) += spapr_vty.o
 obj-$(CONFIG_DIGIC) += digic-uart.o
 
@@ -24,5 +23,6 @@ common-obj-$(CONFIG_LM32) += lm32_juart.o
 common-obj-$(CONFIG_LM32) += lm32_uart.o
 common-obj-$(CONFIG_MILKYMIST) += milkymist-uart.o
 common-obj-$(CONFIG_SCLPCONSOLE) += sclpconsole.o sclpconsole-lm.o
+common-obj-$(CONFIG_SH4) += sh_serial.o
 
 obj-$(CONFIG_VIRTIO) += virtio-serial-bus.o
