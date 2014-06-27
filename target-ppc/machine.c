@@ -2,6 +2,7 @@
 #include "hw/boards.h"
 #include "sysemu/kvm.h"
 #include "helper_regs.h"
+#include "migration/cpu.h"
 
 static int cpu_load_old(QEMUFile *f, void *opaque, int version_id)
 {

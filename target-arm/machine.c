@@ -2,6 +2,7 @@
 #include "hw/boards.h"
 #include "sysemu/kvm.h"
 #include "kvm_arm.h"
+#include "migration/cpu.h"
 
 static bool vfp_needed(void *opaque)
 {

@@ -3,6 +3,7 @@
 #include "qemu/timer.h"
 
 #include "cpu.h"
+#include "migration/cpu.h"
 
 void cpu_save(QEMUFile *f, void *opaque)
 {

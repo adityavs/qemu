@@ -1,5 +1,6 @@
 #include "hw/hw.h"
 #include "hw/boards.h"
+#include "migration/cpu.h"
 
 static const VMStateDescription vmstate_env = {
     .name = "env",

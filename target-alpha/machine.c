@@ -1,5 +1,6 @@
 #include "hw/hw.h"
 #include "hw/boards.h"
+#include "migration/cpu.h"
 
 static int get_fpcr(QEMUFile *f, void *opaque, size_t size)
 {

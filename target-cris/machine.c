@@ -1,5 +1,6 @@
 #include "hw/hw.h"
 #include "hw/boards.h"
+#include "migration/cpu.h"
 
 void cpu_save(QEMUFile *f, void *opaque)
 {

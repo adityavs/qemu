@@ -1,5 +1,6 @@
 #include "hw/hw.h"
 #include "hw/boards.h"
+#include "migration/cpu.h"
 
 const VMStateDescription vmstate_moxie_cpu = {
     .name = "cpu",
