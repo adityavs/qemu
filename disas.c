@@ -6,6 +6,7 @@
 
 #include "cpu.h"
 #include "disas/disas.h"
+#include "disas/syminfo.h"
 
 typedef struct CPUDebug {
     struct disassemble_info info;

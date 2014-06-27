@@ -14,7 +14,7 @@
 #include <time.h>
 
 #include "qemu.h"
-#include "disas/disas.h"
+#include "disas/syminfo.h"
 
 #ifdef _ARCH_PPC64
 #undef ARCH_DLINFO

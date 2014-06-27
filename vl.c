@@ -101,9 +101,6 @@ int main(int argc, char **argv)
 #endif
 #include "sysemu/qtest.h"
 
-#include "disas/disas.h"
-
-
 #include "slirp/libslirp.h"
 
 #include "trace.h"
