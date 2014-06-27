@@ -36,7 +36,6 @@
 #include "qapi/visitor.h"
 #include "sysemu/arch_init.h"
 
-#include "hw/hw.h"
 #if defined(CONFIG_KVM)
 #include <linux/kvm_para.h>
 #endif
@@ -45,6 +44,7 @@
 #include "hw/qdev-properties.h"
 #include "hw/cpu/icc_bus.h"
 #ifndef CONFIG_USER_ONLY
+#include "hw/hw.h"
 #include "hw/xen/xen.h"
 #include "hw/i386/apic_internal.h"
 #endif

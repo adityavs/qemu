@@ -26,8 +26,9 @@
 #include "cpu.h"
 #include "qemu-common.h"
 #include "qemu/timer.h"
-#include "hw/hw.h"
+#include "migration/vmstate.h"
 #ifndef CONFIG_USER_ONLY
+#include "hw/hw.h"
 #include "sysemu/arch_init.h"
 #endif
 
