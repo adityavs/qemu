@@ -48,6 +48,7 @@ common-obj-$(CONFIG_POSIX) += os-posix.o
 
 common-obj-$(CONFIG_LINUX) += fsdev/
 
+common-obj-y += balloon.o
 common-obj-y += numa.o
 common-obj-y += migration.o migration-tcp.o
 common-obj-y += vmstate.o
