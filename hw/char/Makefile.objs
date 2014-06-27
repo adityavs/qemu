@@ -12,7 +12,8 @@ common-obj-$(CONFIG_EXYNOS4) += exynos4210_uart.o
 common-obj-$(CONFIG_OMAP) += omap_uart.o
 common-obj-$(CONFIG_DIGIC) += digic-uart.o
 
-obj-$(CONFIG_COLDFIRE) += mcf_uart.o
+common-obj-$(CONFIG_COLDFIRE) += mcf_uart.o
+
 obj-$(CONFIG_PSERIES) += spapr_vty.o
 
 common-obj-$(CONFIG_ETRAXFS) += etraxfs_ser.o
