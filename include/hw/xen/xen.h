@@ -8,8 +8,9 @@
  */
 #include <inttypes.h>
 
-#include "hw/irq.h"
 #include "qemu-common.h"
+#include "exec/cpu-common.h"
+#include "hw/irq.h"
 
 /* xen-machine.c */
 enum xen_mode {

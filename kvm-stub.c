@@ -12,6 +12,7 @@
 
 #include "qemu-common.h"
 #include "cpu.h"
+#include "hw/hw.h"
 #include "sysemu/kvm.h"
 
 #ifndef CONFIG_USER_ONLY

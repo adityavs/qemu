@@ -13,6 +13,8 @@
  * GNU GPL, version 2 or (at your option) any later version.
  */
 
+#include "qemu-common.h"
+#include "cpu.h"
 #include "exec/memory.h"
 #include "exec/address-spaces.h"
 #include "exec/ioport.h"

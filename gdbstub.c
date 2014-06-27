@@ -18,6 +18,7 @@
  */
 #include "config.h"
 #include "qemu-common.h"
+#include "cpu.h"
 #ifdef CONFIG_USER_ONLY
 #include <stdlib.h>
 #include <stdio.h>

@@ -23,8 +23,8 @@
  */
 
 /* Needed early for CONFIG_BSD etc. */
-#include "config-host.h"
-
+#include "qemu-common.h"
+#include "cpu.h"
 #include "monitor/monitor.h"
 #include "qapi/qmp/qerror.h"
 #include "sysemu/sysemu.h"

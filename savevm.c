@@ -24,6 +24,7 @@
 
 #include "config-host.h"
 #include "qemu-common.h"
+#include "cpu.h"
 #include "hw/boards.h"
 #include "hw/hw.h"
 #include "hw/qdev.h"

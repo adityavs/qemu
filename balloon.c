@@ -24,9 +24,10 @@
  * THE SOFTWARE.
  */
 
+#include "qemu-common.h"
+#include "sysemu/kvm.h"
 #include "monitor/monitor.h"
 #include "exec/cpu-common.h"
-#include "sysemu/kvm.h"
 #include "sysemu/balloon.h"
 #include "trace.h"
 #include "qmp-commands.h"

@@ -28,7 +28,8 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #endif
-#include "config.h"
+#include "qemu-common.h"
+#include "cpu.h"
 #include "monitor/monitor.h"
 #include "sysemu/sysemu.h"
 #include "qemu/bitops.h"

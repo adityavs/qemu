@@ -116,11 +116,6 @@ void dump_drift_info(FILE *f, fprintf_function cpu_fprintf);
 
 #include "qemu/osdep.h"
 
-/* FIXME: Remove NEED_CPU_H.  */
-#ifdef NEED_CPU_H
-#include "cpu.h"
-#endif /* !defined(NEED_CPU_H) */
-
 /* main function, renamed */
 #if defined(CONFIG_COCOA)
 int qemu_main(int argc, char **argv, char **envp);
