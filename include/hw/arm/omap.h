@@ -790,6 +790,8 @@ I2CBus *omap_i2c_bus(DeviceState *omap_i2c);
 # define cpu_class_omap3(cpu) \
         (cpu_is_omap3430(cpu) || cpu_is_omap3630(cpu))
 
+struct ARMCPU;
+
 struct omap_mpu_state_s {
     enum omap_mpu_model {
         omap310,
@@ -805,7 +807,7 @@ struct omap_mpu_state_s {
         omap3630,
     } mpu_model;
 
-    ARMCPU *cpu;
+    struct ARMCPU *cpu;
 
     qemu_irq *drq;
 

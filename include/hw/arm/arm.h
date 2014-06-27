@@ -14,6 +14,8 @@
 #include "exec/memory.h"
 #include "hw/irq.h"
 
+struct ARMCPU;
+
 /* armv7m.c */
 qemu_irq *armv7m_init(MemoryRegion *address_space_mem,
                       int flash_size, int sram_size,
@@ -46,9 +48,9 @@ struct arm_boot_info {
      * perform any necessary CPU reset handling and set the PC for the
      * secondary CPUs to point at this boot blob.
      */
-    void (*write_secondary_boot)(ARMCPU *cpu,
+    void (*write_secondary_boot)(struct ARMCPU *cpu,
                                  const struct arm_boot_info *info);
-    void (*secondary_cpu_reset_hook)(ARMCPU *cpu,
+    void (*secondary_cpu_reset_hook)(struct ARMCPU *cpu,
                                      const struct arm_boot_info *info);
     /* if a board is able to create a dtb without a dtb file then it
      * sets get_dtb. This will only be used if no dtb file is provided
@@ -67,7 +69,7 @@ struct arm_boot_info {
     hwaddr initrd_size;
     hwaddr entry;
 };
-void arm_load_kernel(ARMCPU *cpu, struct arm_boot_info *info);
+void arm_load_kernel(struct ARMCPU *cpu, struct arm_boot_info *info);
 
 /* Multiplication factor to convert from system clock ticks to qemu timer
    ticks.  */
