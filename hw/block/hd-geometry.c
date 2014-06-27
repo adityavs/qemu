@@ -31,6 +31,7 @@
  */
 
 #include "block/block.h"
+#include "qemu/bswap.h"
 #include "hw/block/block.h"
 #include "trace.h"
 

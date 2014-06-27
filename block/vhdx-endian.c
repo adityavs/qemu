@@ -17,6 +17,7 @@
 
 #include "qemu-common.h"
 #include "block/block_int.h"
+#include "qemu/bswap.h"
 #include "block/vhdx.h"
 
 #include <uuid/uuid.h>

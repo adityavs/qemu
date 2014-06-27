@@ -13,6 +13,7 @@
 #include "hw/irq.h"
 #include "block/aio.h"
 #include "migration/vmstate.h"
+#include "qemu/bswap.h"
 #include "qemu/log.h"
 
 typedef void QEMUResetHandler(void *opaque);

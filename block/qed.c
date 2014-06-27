@@ -17,6 +17,7 @@
 #include "qed.h"
 #include "qapi/qmp/qerror.h"
 #include "migration/migration.h"
+#include "qemu/bswap.h"
 
 static void qed_aio_cancel(BlockDriverAIOCB *blockacb)
 {

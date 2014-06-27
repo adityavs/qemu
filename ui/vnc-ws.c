@@ -20,6 +20,7 @@
 
 #include "vnc.h"
 #include "qemu/main-loop.h"
+#include "qemu/bswap.h"
 
 #ifdef CONFIG_VNC_TLS
 #include "qemu/sockets.h"

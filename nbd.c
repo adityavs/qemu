@@ -39,6 +39,7 @@
 #include "qemu/sockets.h"
 #include "qemu/queue.h"
 #include "qemu/main-loop.h"
+#include "qemu/bswap.h"
 
 //#define DEBUG_NBD
 

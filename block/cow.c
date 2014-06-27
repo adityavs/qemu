@@ -24,6 +24,7 @@
 #include "qemu-common.h"
 #include "block/block_int.h"
 #include "qemu/module.h"
+#include "qemu/bswap.h"
 
 /**************************************************************/
 /* COW block driver using file system holes */

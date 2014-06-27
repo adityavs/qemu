@@ -115,7 +115,6 @@ extern int64_t max_advance;
 void dump_drift_info(FILE *f, fprintf_function cpu_fprintf);
 
 #include "qemu/osdep.h"
-#include "qemu/bswap.h"
 
 /* FIXME: Remove NEED_CPU_H.  */
 #ifdef NEED_CPU_H
