@@ -64,3 +64,23 @@ bool atomic_dec_and_qemu_mutex_lock(int *x, QemuMutex *mutex)
         }
     }
 }
+
+/* Decrement a counter and return locked if it is decremented to zero.
+ * Otherwise do nothing.
+ *
+ * Used together with atomic_inc_with_qemu_mutex, it is impossible
+ * for the counter to become nonzero while the mutex is taken.
+ */
+bool atomic_dec_if_qemu_mutex_lock(int *x, QemuMutex *mutex)
+{
+    int old = atomic_mb_read(x);
+    if (old == 1) {
+        qemu_mutex_lock(mutex);
+        if (atomic_fetch_dec(x) == 1) {
+            return true;
+        }
+        atomic_inc(&x);
+        qemu_mutex_unlock(mutex);
+    }
+    return false;
+}

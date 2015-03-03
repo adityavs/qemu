@@ -15,7 +15,7 @@
 
 #include "qemu-common.h"
 #include "block/block.h"
-#include "qemu/queue.h"
+#include "qemu/rcu_queue.h"
 #include "qemu/sockets.h"
 
 struct AioHandler
@@ -49,6 +49,8 @@ void aio_set_fd_handler(AioContext *ctx,
 {
     AioHandler *node;
 
+    qemu_mutex_lock(&ctx->list_lock);
+
     node = find_aio_handler(ctx, fd);
 
     /* Are we deleting the fd handler? */
@@ -56,7 +58,7 @@ void aio_set_fd_handler(AioContext *ctx,
         if (node) {
             g_source_remove_poll(&ctx->source, &node->pfd);
 
-            /* If the lock is held, just mark the node as deleted */
+            /* If aio_poll is in progress, just mark the node as deleted */
             if (ctx->walking_handlers) {
                 node->deleted = 1;
                 node->pfd.revents = 0;
@@ -74,7 +76,7 @@ void aio_set_fd_handler(AioContext *ctx,
             /* Alloc and insert if it's not already there */
             node = g_new0(AioHandler, 1);
             node->pfd.fd = fd;
-            QLIST_INSERT_HEAD(&ctx->aio_handlers, node, node);
+            QLIST_INSERT_HEAD_RCU(&ctx->aio_handlers, node, node);
 
             g_source_add_poll(&ctx->source, &node->pfd);
         }
@@ -87,6 +89,7 @@ void aio_set_fd_handler(AioContext *ctx,
         node->pfd.events |= (io_write ? G_IO_OUT | G_IO_ERR : 0);
     }
 
+    qemu_mutex_unlock(&ctx->list_lock);
     aio_notify(ctx);
 }
 
@@ -106,20 +109,30 @@ bool aio_prepare(AioContext *ctx)
 bool aio_pending(AioContext *ctx)
 {
     AioHandler *node;
+    bool result = false;
 
-    QLIST_FOREACH(node, &ctx->aio_handlers, node) {
+    /*
+     * We have to walk very carefully in case aio_set_fd_handler is
+     * called while we're walking.
+     */
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);
+
+    QLIST_FOREACH_RCU(node, &ctx->aio_handlers, node) {
         int revents;
 
         revents = node->pfd.revents & node->pfd.events;
         if (revents & (G_IO_IN | G_IO_HUP | G_IO_ERR) && node->io_read) {
-            return true;
+            result = true;
+            break;
         }
         if (revents & (G_IO_OUT | G_IO_ERR) && node->io_write) {
-            return true;
+            result = true;
+            break;
         }
     }
+    atomic_dec(&ctx->walking_handlers);
 
-    return false;
+    return result;
 }
 
 bool aio_dispatch(AioContext *ctx)
@@ -140,13 +153,12 @@ bool aio_dispatch(AioContext *ctx)
      * We have to walk very carefully in case aio_set_fd_handler is
      * called while we're walking.
      */
-    ctx->walking_handlers++;
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);
 
-    QLIST_FOREACH_SAFE(node, &ctx->aio_handlers, node, tmp) {
+    QLIST_FOREACH_SAFE_RCU(node, &ctx->aio_handlers, node, tmp) {
         int revents;
 
-        revents = node->pfd.revents & node->pfd.events;
-        node->pfd.revents = 0;
+        revents = atomic_xchg(&node->pfd.revents, 0) & node->pfd.events;
 
         if (!node->deleted &&
             (revents & (G_IO_IN | G_IO_HUP | G_IO_ERR)) &&
@@ -166,15 +178,17 @@ bool aio_dispatch(AioContext *ctx)
         }
 
         if (node->deleted) {
-            ctx->walking_handlers--;
-            if (!ctx->walking_handlers) {
+            if (atomic_dec_if_qemu_mutex_lock(&ctx->walking_handlers,
+                                              &ctx->list_lock)) {
+                QLIST_REMOVE(node, node);
                 g_free(node);
+                atomic_inc(&ctx->walking_handlers);
+                qemu_mutex_unlock(&ctx->list_lock);
             }
-            ctx->walking_handlers++;
         }
     }
 
-    ctx->walking_handlers--;
+    atomic_dec(&ctx->walking_handlers);
 
     /* Run our timers */
     progress |= timerlistgroup_run_timers(&ctx->tlg);
@@ -251,8 +265,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
      */
     prev = aio_set_dispatching(ctx, !blocking);
 
-    ctx->walking_handlers++;
-
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);
     assert(npfd == 0);
 
     /* fill pollfds */
@@ -276,12 +289,12 @@ bool aio_poll(AioContext *ctx, bool blocking)
     /* if we have any readable fds, dispatch event */
     if (ret > 0) {
         for (i = 0; i < npfd; i++) {
-            nodes[i]->pfd.revents = pollfds[i].revents;
+            atomic_or(&nodes[i]->pfd.revents, pollfds[i].revents);
         }
     }
 
     npfd = 0;
-    ctx->walking_handlers--;
+    atomic_dec(&ctx->walking_handlers);
 
     /* Run dispatch even if there were no readable fds to run timers */
     aio_set_dispatching(ctx, true);

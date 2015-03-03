@@ -27,6 +27,7 @@ void qemu_mutex_unlock(QemuMutex *mutex);
 
 void atomic_inc_with_qemu_mutex(int *x, QemuMutex *mutex);
 bool atomic_dec_and_qemu_mutex_lock(int *x, QemuMutex *mutex);
+bool atomic_dec_if_qemu_mutex_lock(int *x, QemuMutex *mutex);
 
 void qemu_cond_init(QemuCond *cond);
 void qemu_cond_destroy(QemuCond *cond);

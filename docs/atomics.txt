@@ -19,7 +19,7 @@ Macros defined by qemu/atomic.h fall in three camps:
 
 - sequentially consistent atomic access: everything else.
 
-QEMU also has two function that helps using counters together with
+QEMU also has three function that helps using counters together with
 a QemuMutex.  These are also documented in this file.
 
 
@@ -374,7 +374,14 @@ QEMU provides functions that help implementing this idiom.  These are:
         and lock the mutex.  If it remains non-zero, return false
         and do not lock the mutex.
 
-The functions can be used as follows:
+    bool atomic_dec_if_qemu_mutex_lock(int *x, QemuMutex *mutex)
+
+        If decrementing x would go from non-zero to zero, do it,
+        return true and lock the mutex.  If it would remain non-zero,
+        and do nothing.
+
+atomic_inc_with_qemu_mutex and atomic_dec_and_qemu_mutex_lock can be
+used as follows:
 
     atomic_inc_with_qemu_mutex(&xyz_users, &xyz_mutex);
     if (xyz) {
@@ -399,6 +406,45 @@ Note that xyz cannot become NULL in the middle of the "if", because:
 If a function wants to decrement the counter, but does not have
 any task to do in case the counter has reached zero, it can simply
 use atomic_dec.
+
+
+atomic_dec_if_qemu_mutex_lock lets you optimize the following idioms:
+
+    /* (1) */
+    if (atomic_dec_and_qemu_mutex_lock(&xyz_users, &xyz_mutex)) {
+        ...
+        mutex_unlock(&xyz_mutex);
+        return;
+    }
+    atomic_inc_with_qemu_mutex(&xyz_mutex);
+
+    /* (2) */
+    if (atomic_dec_and_qemu_mutex_lock(&xyz_users, &xyz_mutex)) {
+        ...
+        mutex_unlock(&xyz_mutex);
+    }
+    atomic_inc_with_qemu_mutex(&xyz_mutex);
+
+to just:
+
+    /* (1) */
+    if (atomic_dec_if_qemu_mutex_lock(&xyz_users, &xyz_mutex)) {
+        ...
+        mutex_unlock(&xyz_mutex);
+        return;
+    }
+
+    /* (2) */
+    if (atomic_dec_if_qemu_mutex_lock(&xyz_users, &xyz_mutex)) {
+        ...
+        atomic_inc(&xyz_mutex);
+        mutex_unlock(&xyz_mutex);
+    }
+
+If atomic_dec_if_qemu_mutex_lock returns false, xyz_users is still
+nonzero and does not have to be incremented.  If it returns true,
+in case (2) we are already in an xyz_mutex critical section and
+the increment can be done within it.
 
 SOURCES
 =======
