@@ -103,6 +103,10 @@ typedef struct CompatGCond {
     GOnce once;
 } CompatGCond;
 
+typedef struct CompatGRecMutex {
+    GOnce once;
+} CompatGRecMutex;
+
 static inline gpointer do_g_mutex_new(gpointer unused)
 {
     return (gpointer) g_mutex_new();
@@ -184,6 +188,46 @@ static inline void (g_cond_signal)(CompatGCond *cond)
 }
 #undef g_cond_signal
 
+static inline gpointer do_g_rec_mutex_new(gpointer unused)
+{
+    return (gpointer) g_rec_mutex_new();
+}
+
+static inline void g_rec_mutex_init(CompatGRecMutex *mutex)
+{
+    mutex->once = (GOnce) G_ONCE_INIT;
+}
+
+static inline void g_rec_mutex_clear(CompatGRecMutex *mutex)
+{
+    assert(mutex->once.status != G_ONCE_STATUS_PROGRESS);
+    if (mutex->once.retval) {
+        g_rec_mutex_free((GRecMutex *) mutex->once.retval);
+    }
+    mutex->once = (GOnce) G_ONCE_INIT;
+}
+
+static inline void (g_rec_mutex_lock)(CompatGRecMutex *mutex)
+{
+    g_once(&mutex->once, do_g_rec_mutex_new, NULL);
+    g_rec_mutex_lock((GRecMutex *) mutex->once.retval);
+}
+#undef g_rec_mutex_lock
+
+static inline gboolean (g_rec_mutex_trylock)(CompatGRecMutex *mutex)
+{
+    g_once(&mutex->once, do_g_rec_mutex_new, NULL);
+    return g_rec_mutex_trylock((GRecMutex *) mutex->once.retval);
+}
+#undef g_rec_mutex_trylock
+
+
+static inline void (g_rec_mutex_unlock)(CompatGRecMutex *mutex)
+{
+    g_rec_mutex_unlock((GRecMutex *) mutex->once.retval);
+}
+#undef g_rec_mutex_unlock
+
 
 /* before 2.31 there was no g_thread_new() */
 static inline GThread *g_thread_new(const char *name,
@@ -198,6 +242,7 @@ static inline GThread *g_thread_new(const char *name,
 #else
 #define CompatGMutex GMutex
 #define CompatGCond GCond
+#define CompatGRecMutex GRecMutex
 #endif /* glib 2.31 */
 
 #endif
