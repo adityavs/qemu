@@ -40,6 +40,7 @@ void aio_set_fd_handler(AioContext *ctx,
     /* fd is a SOCKET in our case */
     AioHandler *node;
 
+    qemu_mutex_lock(&ctx->list_lock);
     QLIST_FOREACH(node, &ctx->aio_handlers, node) {
         if (node->pfd.fd == fd && !node->deleted) {
             break;
@@ -49,7 +50,7 @@ void aio_set_fd_handler(AioContext *ctx,
     /* Are we deleting the fd handler? */
     if (!io_read && !io_write) {
         if (node) {
-            /* If the lock is held, just mark the node as deleted */
+            /* If aio_poll is in progress, just mark the node as deleted */
             if (ctx->walking_handlers) {
                 node->deleted = 1;
                 node->pfd.revents = 0;
@@ -69,7 +70,7 @@ void aio_set_fd_handler(AioContext *ctx,
             /* Alloc and insert if it's not already there */
             node = g_new0(AioHandler, 1);
             node->pfd.fd = fd;
-            QLIST_INSERT_HEAD(&ctx->aio_handlers, node, node);
+            QLIST_INSERT_HEAD_RCU(&ctx->aio_handlers, node, node);
         }
 
         node->pfd.events = 0;
@@ -93,6 +94,7 @@ void aio_set_fd_handler(AioContext *ctx,
                        FD_CONNECT | FD_WRITE | FD_OOB);
     }
 
+    qemu_mutex_unlock(&ctx->list_lock);
     aio_notify(ctx);
 }
 
@@ -102,6 +104,7 @@ void aio_set_event_notifier(AioContext *ctx,
 {
     AioHandler *node;
 
+    qemu_mutex_lock(&ctx->list_lock);
     QLIST_FOREACH(node, &ctx->aio_handlers, node) {
         if (node->e == e && !node->deleted) {
             break;
@@ -113,7 +116,7 @@ void aio_set_event_notifier(AioContext *ctx,
         if (node) {
             g_source_remove_poll(&ctx->source, &node->pfd);
 
-            /* If the lock is held, just mark the node as deleted */
+            /* aio_poll is in progress, just mark the node as deleted */
             if (ctx->walking_handlers) {
                 node->deleted = 1;
                 node->pfd.revents = 0;
@@ -133,7 +136,7 @@ void aio_set_event_notifier(AioContext *ctx,
             node->e = e;
             node->pfd.fd = (uintptr_t)event_notifier_get_handle(e);
             node->pfd.events = G_IO_IN;
-            QLIST_INSERT_HEAD(&ctx->aio_handlers, node, node);
+            QLIST_INSERT_HEAD_RCU(&ctx->aio_handlers, node, node);
 
             g_source_add_poll(&ctx->source, &node->pfd);
         }
@@ -141,6 +144,7 @@ void aio_set_event_notifier(AioContext *ctx,
         node->io_notify = io_notify;
     }
 
+    qemu_mutex_unlock(&ctx->list_lock);
     aio_notify(ctx);
 }
 
@@ -151,10 +155,16 @@ bool aio_prepare(AioContext *ctx)
     bool have_select_revents = false;
     fd_set rfds, wfds;
 
+    /*
+     * We have to walk very carefully in case aio_set_fd_handler is
+     * called while we're walking.
+     */
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);
+
     /* fill fd sets */
     FD_ZERO(&rfds);
     FD_ZERO(&wfds);
-    QLIST_FOREACH(node, &ctx->aio_handlers, node) {
+    QLIST_FOREACH_RCU(node, &ctx->aio_handlers, node) {
         if (node->io_read) {
             FD_SET ((SOCKET)node->pfd.fd, &rfds);
         }
@@ -165,60 +175,70 @@ bool aio_prepare(AioContext *ctx)
 
     if (select(0, &rfds, &wfds, NULL, &tv0) > 0) {
         QLIST_FOREACH(node, &ctx->aio_handlers, node) {
-            node->pfd.revents = 0;
             if (FD_ISSET(node->pfd.fd, &rfds)) {
-                node->pfd.revents |= G_IO_IN;
+                atomic_or(&node->pfd.revents, G_IO_IN);
                 have_select_revents = true;
             }
 
             if (FD_ISSET(node->pfd.fd, &wfds)) {
-                node->pfd.revents |= G_IO_OUT;
+                atomic_or(&node->pfd.revents, G_IO_OUT);
                 have_select_revents = true;
             }
         }
     }
 
+    atomic_dec(&ctx->walking_handlers);
     return have_select_revents;
 }
 
 bool aio_pending(AioContext *ctx)
 {
     AioHandler *node;
-
-    QLIST_FOREACH(node, &ctx->aio_handlers, node) {
-        if (node->pfd.revents && node->io_notify) {
-            return true;
-        }
-
-        if ((node->pfd.revents & G_IO_IN) && node->io_read) {
-            return true;
-        }
-        if ((node->pfd.revents & G_IO_OUT) && node->io_write) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-static bool aio_dispatch_handlers(AioContext *ctx, HANDLE event)
-{
-    AioHandler *node, *tmp;
-    bool progress = false;
-
-    ctx->walking_handlers++;
+    bool result = false;
 
     /*
      * We have to walk very carefully in case aio_set_fd_handler is
      * called while we're walking.
      */
-    QLIST_FOREACH_SAFE(node, &ctx->aio_handlers, node, tmp) {
-        int revents = node->pfd.revents;
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);
+    QLIST_FOREACH_RCU(node, &ctx->aio_handlers, node) {
+        if (node->pfd.revents && node->io_notify) {
+            result = true;
+            break;
+        }
+
+        if ((node->pfd.revents & G_IO_IN) && node->io_read) {
+            result = true;
+            break;
+        }
+        if ((node->pfd.revents & G_IO_OUT) && node->io_write) {
+            result = true;
+            break;
+        }
+    }
+
+    atomic_dec(&ctx->walking_handlers);
+    return result;
+}
+
+static bool aio_dispatch_handlers(AioContext *ctx, HANDLE event)
+{
+    AioHandler *node;
+    bool progress = false;
+
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);;
+
+    /*
+     * We have to walk very carefully in case aio_set_fd_handler is
+     * called while we're walking.
+     */
+    QLIST_FOREACH_SAFE_RCU(node, &ctx->aio_handlers, node, tmp) {
+        AioHandler *tmp;
+        int revents = atomic_xchg(&node->pfd.revents, 0);
 
         if (!node->deleted &&
             (revents || event_notifier_get_handle(node->e) == event) &&
             node->io_notify) {
-            node->pfd.revents = 0;
             node->io_notify(node->e);
 
             /* aio_notify() does not count as progress */
@@ -229,7 +249,6 @@ static bool aio_dispatch_handlers(AioContext *ctx, HANDLE event)
 
         if (!node->deleted &&
             (node->io_read || node->io_write)) {
-            node->pfd.revents = 0;
             if ((revents & G_IO_IN) && node->io_read) {
                 node->io_read(node->opaque);
                 progress = true;
@@ -250,16 +269,17 @@ static bool aio_dispatch_handlers(AioContext *ctx, HANDLE event)
         }
 
         if (node->deleted) {
-            ctx->walking_handlers--;
-            if (!ctx->walking_handlers) {
+            if (atomic_dec_if_qemu_mutex_lock(&ctx->walking_handlers,
+                                              &ctx->list_lock)) {
                 QLIST_REMOVE(tmp, node);
                 g_free(tmp);
+                atomic_inc(&ctx->walking_handlers);
+                qemu_mutex_unlock(&ctx->list_lock);
             }
-            ctx->walking_handlers++;
         }
     }
 
-    ctx->walking_handlers--;
+    atomic_dec(&ctx->walking_handlers);
     return progress;
 }
 
@@ -283,6 +303,8 @@ bool aio_poll(AioContext *ctx, bool blocking)
     int timeout;
 
     aio_context_acquire(ctx);
+    atomic_inc_with_qemu_mutex(&ctx->walking_handlers, &ctx->list_lock);
+
     have_select_revents = aio_prepare(ctx);
     if (have_select_revents) {
         blocking = false;
@@ -302,8 +324,6 @@ bool aio_poll(AioContext *ctx, bool blocking)
      */
     prev = aio_set_dispatching(ctx, !blocking);
 
-    ctx->walking_handlers++;
-
     /* fill fd sets */
     count = 0;
     QLIST_FOREACH(node, &ctx->aio_handlers, node) {
@@ -312,7 +332,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
         }
     }
 
-    ctx->walking_handlers--;
+    atomic_dec(&ctx->walking_handlers);
     first = true;
 
     /* wait until next event */
