@@ -51,19 +51,19 @@ typedef void IOHandler(void *opaque);
 struct AioContext {
     GSource source;
 
-    /* Protects all fields from multi-threaded access */
+    /* Used by AioContext users to protect from multi-threaded access.  */
     RFifoLock lock;
 
-    /* The list of registered AIO handlers */
+    /* The list of registered AIO handlers.  Protected by ctx->list_lock. */
     QLIST_HEAD(, AioHandler) aio_handlers;
 
-    /* This is a simple lock used to protect the aio_handlers list.
-     * Specifically, it's used to ensure that no callbacks are removed while
-     * we're walking and dispatching callbacks.
+    /* This is a simple guard used to protect the aio_handlers list.
+     * Accessed atomically, with zero->nonzero transitions protected
+     * by ctx->list_lock.
      */
     int walking_handlers;
 
-    /* lock to protect between bh's adders and deleter */
+    /* lock to protect between QEMUBH and AioHandler adders and deleters */
     QemuMutex list_lock;
 
     /* Anchor of the list of Bottom Halves belonging to the context */
@@ -71,16 +71,22 @@ struct AioContext {
 
     /* A simple lock used to protect the first_bh list, and ensure that
      * no callbacks are removed while we're walking and dispatching callbacks.
+     * Accessed atomically, with zero->nonzero transitions protected
+     * by ctx->list_lock.
      */
     int walking_bh;
 
     /* Used for aio_notify.  */
     EventNotifier notifier;
 
-    /* Thread pool for performing work and receiving completion callbacks */
+    /* Thread pool for performing work and receiving completion callbacks.
+     * Has its own locking.
+     */
     struct ThreadPool *thread_pool;
 
-    /* TimerLists for calling timers - one per clock type */
+    /* TimerLists for calling timers - one per clock type.  Has its own
+     * locking.
+     */
     QEMUTimerListGroup tlg;
 };
 
