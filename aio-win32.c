@@ -278,8 +278,9 @@ bool aio_dispatch(AioContext *ctx)
 bool aio_poll(AioContext *ctx, bool blocking)
 {
     AioHandler *node;
+    AioContext *prev;
     HANDLE events[MAXIMUM_WAIT_OBJECTS + 1];
-    bool was_dispatching, progress, have_select_revents, first;
+    bool progress, have_select_revents, first;
     int count;
     int timeout;
 
@@ -289,7 +290,6 @@ bool aio_poll(AioContext *ctx, bool blocking)
         blocking = false;
     }
 
-    was_dispatching = ctx->dispatching;
     progress = false;
 
     /* aio_notify can avoid the expensive event_notifier_set if
@@ -302,7 +302,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
      * In that case we can restore it just before returning, but we
      * have to clear it now.
      */
-    aio_set_dispatching(ctx, !blocking);
+    prev = aio_set_dispatching(ctx, !blocking);
 
     ctx->walking_handlers++;
 
@@ -355,7 +355,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
 
     progress |= timerlistgroup_run_timers(&ctx->tlg);
 
-    aio_set_dispatching(ctx, was_dispatching);
+    aio_restore_dispatching(prev);
     aio_context_release(ctx);
     return progress;
 }

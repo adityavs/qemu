@@ -254,23 +254,23 @@ ThreadPool *aio_get_thread_pool(AioContext *ctx)
     return ctx->thread_pool;
 }
 
-void aio_set_dispatching(AioContext *ctx, bool dispatching)
+static __thread AioContext *current_ctx;
+
+void aio_restore_dispatching(AioContext *ctx)
 {
-    ctx->dispatching = dispatching;
-    if (!dispatching) {
-        /* Write ctx->dispatching before reading e.g. bh->scheduled.
-         * Optimization: this is only needed when we're entering the "unsafe"
-         * phase where other threads must call event_notifier_set.
-         */
-        smp_mb();
-    }
+    current_ctx = ctx;
+}
+
+AioContext *aio_set_dispatching(AioContext *ctx, bool dispatching)
+{
+    AioContext *old = current_ctx;
+    current_ctx = dispatching ? ctx : NULL;
+    return old;
 }
 
 void aio_notify(AioContext *ctx)
 {
-    /* Write e.g. bh->scheduled before reading ctx->dispatching.  */
-    smp_mb();
-    if (!ctx->dispatching) {
+    if (current_ctx != ctx) {
         event_notifier_set(&ctx->notifier);
     }
 }

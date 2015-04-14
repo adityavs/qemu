@@ -233,13 +233,12 @@ static void add_pollfd(AioHandler *node)
 bool aio_poll(AioContext *ctx, bool blocking)
 {
     AioHandler *node;
-    bool was_dispatching;
+    AioContext *prev;
     int i, ret;
     bool progress;
     int64_t timeout;
 
     aio_context_acquire(ctx);
-    was_dispatching = ctx->dispatching;
     progress = false;
 
     /* aio_notify can avoid the expensive event_notifier_set if
@@ -252,7 +251,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
      * In that case we can restore it just before returning, but we
      * have to clear it now.
      */
-    aio_set_dispatching(ctx, !blocking);
+    prev = aio_set_dispatching(ctx, !blocking);
 
     ctx->walking_handlers++;
 
@@ -292,7 +291,7 @@ bool aio_poll(AioContext *ctx, bool blocking)
         progress = true;
     }
 
-    aio_set_dispatching(ctx, was_dispatching);
+    aio_restore_dispatching(prev);
     aio_context_release(ctx);
 
     return progress;

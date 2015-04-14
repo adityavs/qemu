@@ -63,11 +63,6 @@ struct AioContext {
      */
     int walking_handlers;
 
-    /* Used to avoid unnecessary event_notifier_set calls in aio_notify.
-     * Writes protected by lock or BQL, reads are lockless.
-     */
-    bool dispatching;
-
     /* lock to protect between bh's adders and deleter */
     QemuMutex bh_lock;
 
@@ -89,8 +84,9 @@ struct AioContext {
     QEMUTimerListGroup tlg;
 };
 
-/* Used internally to synchronize aio_poll against qemu_bh_schedule.  */
-void aio_set_dispatching(AioContext *ctx, bool dispatching);
+/* Used internally to optimize bottom halves that retrigger themselves.  */
+void aio_restore_dispatching(AioContext *ctx);
+AioContext *aio_set_dispatching(AioContext *ctx, bool dispatching);
 
 /**
  * aio_context_new: Allocate a new AioContext.
