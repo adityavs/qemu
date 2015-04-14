@@ -65,7 +65,7 @@ int aio_bh_poll(AioContext *ctx)
     QEMUBH *bh, **bhp, *next;
     int ret;
 
-    ctx->walking_bh++;
+    atomic_inc_with_qemu_mutex(&ctx->walking_bh, &ctx->list_lock);
 
     ret = 0;
     for (bh = ctx->first_bh; bh; bh = next) {
@@ -86,11 +86,8 @@ int aio_bh_poll(AioContext *ctx)
         }
     }
 
-    ctx->walking_bh--;
-
     /* remove deleted bhs */
-    if (!ctx->walking_bh) {
-        qemu_mutex_lock(&ctx->list_lock);
+    if (atomic_dec_and_qemu_mutex_lock(&ctx->walking_bh, &ctx->list_lock)) {
         bhp = &ctx->first_bh;
         while (*bhp) {
             bh = *bhp;

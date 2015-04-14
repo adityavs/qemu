@@ -19,6 +19,9 @@ Macros defined by qemu/atomic.h fall in three camps:
 
 - sequentially consistent atomic access: everything else.
 
+QEMU also has two function that helps using counters together with
+a QemuMutex.  These are also documented in this file.
+
 
 COMPILER MEMORY BARRIER
 =======================
@@ -342,6 +345,60 @@ and memory barriers, and the equivalents in QEMU:
   atomic_mb_set().  In particular, note that set_mb() is a little
   weaker than atomic_mb_set().
 
+
+
+INTERACTION WITH MUTEXES
+========================
+
+One common usage of atomic operations is as a flag communicating to the
+rest of the program "I am doing X"; for example, the flag could tell
+the rest of the program that a particular data structure is being walked
+concurrently and should not be freed.
+
+Compared to an rwlock, readers can proceed concurrently, but writers
+will simply delay their action until there are no concurrent accesses.
+If concurrent access is rare, this can be an effective way to avoid
+taking locks during a walk of the data structure.  (Another way to
+avoid taking locks is RCU, of course).
+
+QEMU provides functions that help implementing this idiom.  These are:
+
+    void atomic_inc_with_qemu_mutex(int *x, QemuMutex *mutex)
+
+        Increments x.  If it goes from zero to non-zero, wait for
+        other threads that are holding the mutex before returning.
+
+    bool atomic_dec_and_qemu_mutex_lock(int *x, QemuMutex *mutex)
+
+        Decrements x.  If it goes from non-zero to zero, return true
+        and lock the mutex.  If it remains non-zero, return false
+        and do not lock the mutex.
+
+The functions can be used as follows:
+
+    atomic_inc_with_qemu_mutex(&xyz_users, &xyz_mutex);
+    if (xyz) {
+        ... access xyz ...
+    }
+
+    if (atomic_dec_and_qemu_mutex_lock(&xyz_users, &xyz_mutex)) {
+        g_free(xyz);
+        xyz = NULL;
+        mutex_unlock(&xyz_mutex);
+    }
+
+Note that xyz cannot become NULL in the middle of the "if", because:
+
+- a concurrent atomic_dec_and_qemu_mutex_lock that returned true
+  will lock out atomic_inc_with_qemu_mutex until the final
+  mutex_unlock.
+
+- a concurrent atomic_dec_and_qemu_mutex_lock started after
+  atomic_inc_with_qemu_mutex will return false.
+
+If a function wants to decrement the counter, but does not have
+any task to do in case the counter has reached zero, it can simply
+use atomic_dec.
 
 SOURCES
 =======
