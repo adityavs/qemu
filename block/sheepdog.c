@@ -337,7 +337,6 @@ struct SheepdogAIOCB {
 };
 
 typedef struct BDRVSheepdogState {
-    BlockDriverState *bs;
     AioContext *aio_context;
 
     SheepdogInode inode;
@@ -759,7 +758,7 @@ static coroutine_fn void reconnect_to_sdog(void *opaque)
         if (s->fd < 0) {
             DPRINTF("Wait for connection to be established\n");
             error_report_err(local_err);
-            co_aio_sleep_ns(bdrv_get_aio_context(s->bs), QEMU_CLOCK_REALTIME,
+            co_aio_sleep_ns(s->aio_context, QEMU_CLOCK_REALTIME,
                             1000000000ULL);
         }
     };
@@ -1451,7 +1450,6 @@ static int sd_open(BlockDriverState *bs, QDict *options, int flags,
     Error *local_err = NULL;
     const char *filename;
 
-    s->bs = bs;
     s->aio_context = bdrv_get_aio_context(bs);
 
     opts = qemu_opts_create(&runtime_opts, NULL, 0, &error_abort);
