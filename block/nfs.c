@@ -101,9 +101,13 @@ static void nfs_co_init_task(NFSClient *client, NFSRPC *task)
 static void nfs_co_generic_bh_cb(void *opaque)
 {
     NFSRPC *task = opaque;
+    AioContext *ctx = task->client->aio_context;
+
     task->complete = 1;
     qemu_bh_delete(task->bh);
+    aio_context_acquire(ctx);
     qemu_coroutine_enter(task->co, NULL);
+    aio_context_release(ctx);
 }
 
 static void

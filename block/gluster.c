@@ -232,7 +232,9 @@ static void qemu_gluster_complete_aio(void *opaque)
 
     qemu_bh_delete(acb->bh);
     acb->bh = NULL;
+    aio_context_acquire(acb->aio_context);
     qemu_coroutine_enter(acb->coroutine, NULL);
+    aio_context_release(acb->aio_context);
 }
 
 /*

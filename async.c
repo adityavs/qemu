@@ -82,9 +82,7 @@ int aio_bh_poll(AioContext *ctx)
             if (!bh->idle)
                 ret = 1;
             bh->idle = 0;
-            aio_context_acquire(ctx);
             bh->cb(bh->opaque);
-            aio_context_release(ctx);
         }
     }
 
