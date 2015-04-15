@@ -56,9 +56,8 @@ static void nbd_teardown_connection(BlockDriverState *bs)
     client->sock = -1;
 }
 
-static void nbd_reply_ready(void *opaque)
+static void nbd_reply_ready_locked(BlockDriverState *bs)
 {
-    BlockDriverState *bs = opaque;
     NbdClientSession *s = nbd_get_client_session(bs);
     uint64_t i;
     int ret;
@@ -95,11 +94,22 @@ fail:
     nbd_teardown_connection(bs);
 }
 
+static void nbd_reply_ready(void *opaque)
+{
+    BlockDriverState *bs = opaque;
+
+    aio_context_acquire(bdrv_get_aio_context(bs));
+    nbd_reply_ready_locked(bs);
+    aio_context_release(bdrv_get_aio_context(bs));
+}
+
 static void nbd_restart_write(void *opaque)
 {
     BlockDriverState *bs = opaque;
 
+    aio_context_acquire(bdrv_get_aio_context(bs));
     qemu_coroutine_enter(nbd_get_client_session(bs)->send_coroutine, NULL);
+    aio_context_release(bdrv_get_aio_context(bs));
 }
 
 static int nbd_co_send_request(BlockDriverState *bs,

@@ -594,13 +594,6 @@ static coroutine_fn int send_co_req(int sockfd, SheepdogReq *hdr, void *data,
     return ret;
 }
 
-static void restart_co_req(void *opaque)
-{
-    Coroutine *co = opaque;
-
-    qemu_coroutine_enter(co, NULL);
-}
-
 typedef struct SheepdogReqCo {
     int sockfd;
     AioContext *aio_context;
@@ -610,12 +603,21 @@ typedef struct SheepdogReqCo {
     unsigned int *rlen;
     int ret;
     bool finished;
+    Coroutine *co;
 } SheepdogReqCo;
+
+static void restart_co_req(void *opaque)
+{
+    SheepdogReqCo *srco = opaque;
+
+    aio_context_acquire(srco->aio_context);
+    qemu_coroutine_enter(srco->co, NULL);
+    aio_context_release(srco->aio_context);
+}
 
 static coroutine_fn void do_co_req(void *opaque)
 {
     int ret;
-    Coroutine *co;
     SheepdogReqCo *srco = opaque;
     int sockfd = srco->sockfd;
     SheepdogReq *hdr = srco->hdr;
@@ -623,15 +625,15 @@ static coroutine_fn void do_co_req(void *opaque)
     unsigned int *wlen = srco->wlen;
     unsigned int *rlen = srco->rlen;
 
-    co = qemu_coroutine_self();
-    aio_set_fd_handler(srco->aio_context, sockfd, NULL, restart_co_req, co);
+    srco->co = qemu_coroutine_self();
+    aio_set_fd_handler(srco->aio_context, sockfd, NULL, restart_co_req, srco);
 
     ret = send_co_req(sockfd, hdr, data, wlen);
     if (ret < 0) {
         goto out;
     }
 
-    aio_set_fd_handler(srco->aio_context, sockfd, restart_co_req, NULL, co);
+    aio_set_fd_handler(srco->aio_context, sockfd, restart_co_req, NULL, srco);
 
     ret = qemu_co_recv(sockfd, hdr, sizeof(*hdr));
     if (ret != sizeof(*hdr)) {
@@ -658,6 +660,7 @@ out:
      * set each handler to NULL. */
     aio_set_fd_handler(srco->aio_context, sockfd, NULL, NULL, NULL);
 
+    srco->co = NULL;
     srco->ret = ret;
     srco->finished = true;
 }
@@ -928,14 +931,18 @@ static void co_read_response(void *opaque)
         s->co_recv = qemu_coroutine_create(aio_read_response);
     }
 
+    aio_context_acquire(s->aio_context);
     qemu_coroutine_enter(s->co_recv, opaque);
+    aio_context_release(s->aio_context);
 }
 
 static void co_write_request(void *opaque)
 {
     BDRVSheepdogState *s = opaque;
 
+    aio_context_acquire(s->aio_context);
     qemu_coroutine_enter(s->co_send, NULL);
+    aio_context_release(s->aio_context);
 }
 
 /*

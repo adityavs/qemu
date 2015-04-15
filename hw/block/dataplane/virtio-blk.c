@@ -95,6 +95,7 @@ static void handle_notify(EventNotifier *e)
     VirtIOBlock *vblk = VIRTIO_BLK(s->vdev);
 
     event_notifier_test_and_clear(&s->host_notifier);
+    aio_context_acquire(s->ctx);
     blk_io_plug(s->conf->conf.blk);
     for (;;) {
         MultiReqBuffer mrb = {};
@@ -135,6 +136,7 @@ static void handle_notify(EventNotifier *e)
         }
     }
     blk_io_unplug(s->conf->conf.blk);
+    aio_context_release(s->ctx);
 }
 
 /* Context: QEMU global mutex held */

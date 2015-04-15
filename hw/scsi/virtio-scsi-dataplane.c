@@ -112,9 +112,11 @@ static void virtio_scsi_iothread_handle_ctrl(EventNotifier *notifier)
     VirtIOSCSIReq *req;
 
     event_notifier_test_and_clear(notifier);
+    aio_context_acquire(s->ctx);
     while ((req = virtio_scsi_pop_req_vring(s, vring))) {
         virtio_scsi_handle_ctrl_req(s, req);
     }
+    aio_context_release(s->ctx);
 }
 
 static void virtio_scsi_iothread_handle_event(EventNotifier *notifier)
@@ -130,9 +132,11 @@ static void virtio_scsi_iothread_handle_event(EventNotifier *notifier)
         return;
     }
 
+    aio_context_acquire(s->ctx);
     if (s->events_dropped) {
         virtio_scsi_push_event(s, NULL, VIRTIO_SCSI_T_NO_EVENT, 0);
     }
+    aio_context_release(s->ctx);
 }
 
 static void virtio_scsi_iothread_handle_cmd(EventNotifier *notifier)
@@ -144,6 +148,7 @@ static void virtio_scsi_iothread_handle_cmd(EventNotifier *notifier)
     QTAILQ_HEAD(, VirtIOSCSIReq) reqs = QTAILQ_HEAD_INITIALIZER(reqs);
 
     event_notifier_test_and_clear(notifier);
+    aio_context_acquire(s->ctx);
     while ((req = virtio_scsi_pop_req_vring(s, vring))) {
         if (virtio_scsi_handle_cmd_req_prepare(s, req)) {
             QTAILQ_INSERT_TAIL(&reqs, req, next);
@@ -153,6 +158,7 @@ static void virtio_scsi_iothread_handle_cmd(EventNotifier *notifier)
     QTAILQ_FOREACH_SAFE(req, &reqs, next, next) {
         virtio_scsi_handle_cmd_req_submit(s, req);
     }
+    aio_context_release(s->ctx);
 }
 
 /* assumes s->ctx held */

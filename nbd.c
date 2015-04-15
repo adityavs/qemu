@@ -1436,6 +1436,9 @@ static void nbd_restart_write(void *opaque)
 static void nbd_set_handlers(NBDClient *client)
 {
     if (client->exp && client->exp->ctx) {
+        /* Note that the handlers do not expect any concurrency; qemu-nbd
+         * does not instantiate multiple AioContexts yet.
+         */
         aio_set_fd_handler(client->exp->ctx, client->sock,
                            client->can_read ? nbd_read : NULL,
                            client->send_coroutine ? nbd_restart_write : NULL,
