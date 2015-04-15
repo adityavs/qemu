@@ -104,13 +104,17 @@ void bdrv_io_limits_disable(BlockDriverState *bs)
 static void bdrv_throttle_read_timer_cb(void *opaque)
 {
     BlockDriverState *bs = opaque;
+    aio_context_acquire(bdrv_get_aio_context(bs));
     qemu_co_enter_next(&bs->throttled_reqs[0]);
+    aio_context_release(bdrv_get_aio_context(bs));
 }
 
 static void bdrv_throttle_write_timer_cb(void *opaque)
 {
     BlockDriverState *bs = opaque;
+    aio_context_acquire(bdrv_get_aio_context(bs));
     qemu_co_enter_next(&bs->throttled_reqs[1]);
+    aio_context_release(bdrv_get_aio_context(bs));
 }
 
 /* should be called before bdrv_set_io_limits if a limit is set */

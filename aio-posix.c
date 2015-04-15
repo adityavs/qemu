@@ -191,9 +191,7 @@ bool aio_dispatch(AioContext *ctx)
     atomic_dec(&ctx->walking_handlers);
 
     /* Run our timers */
-    aio_context_acquire(ctx);
     progress |= timerlistgroup_run_timers(&ctx->tlg);
-    aio_context_release(ctx);
 
     return progress;
 }
