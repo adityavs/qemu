@@ -64,6 +64,7 @@ int aio_bh_poll(AioContext *ctx)
 {
     QEMUBH *bh, **bhp, *next;
     int ret;
+    bool deleted = false;
 
     atomic_inc_with_qemu_mutex(&ctx->walking_bh, &ctx->list_lock);
 
@@ -72,13 +73,17 @@ int aio_bh_poll(AioContext *ctx)
         /* Make sure that fetching bh happens before accessing its members */
         smp_read_barrier_depends();
         next = bh->next;
+        if (bh->deleted) {
+            deleted = true;
+            continue;
+        }
         /* The atomic_xchg is paired with the one in qemu_bh_schedule.  The
          * implicit memory barrier ensures that the callback sees all writes
          * done by the scheduling thread.  It also ensures that the scheduling
          * thread sees the zero before bh->cb has run, and thus will call
          * aio_notify again if necessary.
          */
-        if (!bh->deleted && atomic_xchg(&bh->scheduled, 0)) {
+        if (atomic_xchg(&bh->scheduled, 0)) {
             if (!bh->idle)
                 ret = 1;
             bh->idle = 0;
@@ -87,6 +92,11 @@ int aio_bh_poll(AioContext *ctx)
     }
 
     /* remove deleted bhs */
+    if (!deleted) {
+        atomic_dec(&ctx->walking_bh);
+        return ret;
+    }
+
     if (atomic_dec_and_qemu_mutex_lock(&ctx->walking_bh, &ctx->list_lock)) {
         bhp = &ctx->first_bh;
         while (*bhp) {
@@ -100,7 +110,6 @@ int aio_bh_poll(AioContext *ctx)
         }
         qemu_mutex_unlock(&ctx->list_lock);
     }
-
     return ret;
 }
 
@@ -221,6 +230,15 @@ static void
 aio_ctx_finalize(GSource     *source)
 {
     AioContext *ctx = (AioContext *) source;
+
+    qemu_mutex_lock(&ctx->list_lock);
+    while (ctx->first_bh) {
+        QEMUBH *bh = ctx->first_bh->next;
+        assert(ctx->first_bh->deleted);
+        g_free(ctx->first_bh);
+        ctx->first_bh = bh;
+    }
+    qemu_mutex_unlock(&ctx->list_lock);
 
     thread_pool_free(ctx->thread_pool);
     aio_set_event_notifier(ctx, &ctx->notifier, NULL);
